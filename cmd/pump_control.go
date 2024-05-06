@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"github.com/yupri/gohome/common"
 	"os"
 	"os/signal"
 	"syscall"

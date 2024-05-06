@@ -1,4 +1,4 @@
-module yupri.com/gohome/v2
+module github.com/yu-pri/go_home
 
 go 1.22.2
 
