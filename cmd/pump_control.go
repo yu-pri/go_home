@@ -1,22 +1,18 @@
 package cmd
 
 import (
+	"github.com/yu-pri/go_home/common"
+	"github.com/yu-pri/go_home/services/pump_control"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-type PumpControllerConfig struct {
-	brokerUri              string
-	reverseTempSensorTopic string
-	pumpRelayTopic         string
-}
-
 func main() {
-	client := SetupMqttConnection()
+	client := common.SetupMqttConnection()
 	defer client.Disconnect(1000)
 
-	client.Subscribe("/sensors/temp/01", 1, HandleTemperaturePayload)
+	client.Subscribe("/sensors/temp/01", 1, pumpcontrol.HandleTemperaturePayload)
 	defer client.Unsubscribe("/sensors/temp/01")
 
 	<-setupStopSignal()
