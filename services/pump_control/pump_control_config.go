@@ -1,9 +1,14 @@
 package pumpcontrol
 
+import "github.com/yu-pri/go_home/common"
+
 type PumpControllerConfig struct {
-	reverseTempSensorTopic string
-	pumpRelayTopic         string
+	ReverseTempSensorTopic string `yaml:"reverse_temp_sensor_topic"`
+	PumpRelayTopic         string `yaml:"pump_relay_topic"`
+	PumpOnTemperature      int    `yaml:"pump_on_temperature"`
 }
 
-func ParseFromFile(configPath string) {
+func ParseConfig(configPath string) (PumpControllerConfig, error) {
+	config, err := common.ReadParseYamlFile[PumpControllerConfig](configPath)
+	return *config, err
 }
