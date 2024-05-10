@@ -9,7 +9,6 @@ import (
 
 type MqttClientConfig struct {
 	BrokerUri string `yaml:"broker_uri"`
-	ClientId  string `yaml:"client_id"`
 	Verbose   bool   `yaml:"verbose"`
 }
 
@@ -42,13 +41,13 @@ func (logger) Println(v ...interface{}) {
 	fmt.Println(v...)
 }
 
-func SetupMqttConnection(c MqttClientConfig, s MqttClientSecrets) mqtt.Client {
+func SetupMqttConnection(c MqttClientConfig, s MqttClientSecrets, clientId string) mqtt.Client {
 	opts := mqtt.NewClientOptions()
 	fmt.Printf("broker uri : %s", c.BrokerUri)
 	opts.SetUsername(s.username)
 	opts.SetPassword(s.password)
 	opts.AddBroker(c.BrokerUri)
-	opts.SetClientID(c.ClientId)
+	opts.SetClientID(clientId)
 
 	logger := logger{}
 	mqtt.ERROR = logger
