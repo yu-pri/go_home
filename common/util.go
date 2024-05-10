@@ -14,7 +14,8 @@ func ReadParseYamlFile[T interface{}](filePath string) (*T, error) {
 		return nil, err
 	}
 	var out T
-	err = yaml.Unmarshal(yamlFile, out)
+
+	err = yaml.Unmarshal(yamlFile, &out)
 	if err != nil {
 		return nil, err
 	}

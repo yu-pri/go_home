@@ -8,15 +8,15 @@ import (
 )
 
 type MqttClientConfig struct {
-	passwdFile string `yaml:"passwd_file"`
-	brokerUri  string `yaml:"broker_uri"`
-	clientId   string `yaml:"client_id"`
-	verbose    bool   `yaml:"verbose"`
+	BrokerUri string `yaml:"broker_uri"`
+	ClientId  string `yaml:"client_id"`
+	Verbose   bool   `yaml:"verbose"`
 }
 
-func ParseMqttConfigFile(filePath string) (MqttClientConfig, error) {
-	cfg, err := ReadParseYamlFile[MqttClientConfig](filePath)
-	return *cfg, err
+func ParseMqttConfigFile(filePath string) (*MqttClientConfig, error) {
+	out, err := ReadParseYamlFile[MqttClientConfig](filePath)
+	fmt.Printf("\nmqtt cfg: %s, %s, %s\n", out.BrokerUri, out.ClientId, out.Verbose)
+	return out, err
 }
 
 type MqttClientSecrets struct {
@@ -44,17 +44,18 @@ func (logger) Println(v ...interface{}) {
 
 func SetupMqttConnection(c MqttClientConfig, s MqttClientSecrets) mqtt.Client {
 	opts := mqtt.NewClientOptions()
+	fmt.Printf("broker uri : %s", c.BrokerUri)
 	opts.SetUsername(s.username)
 	opts.SetPassword(s.password)
-	opts.AddBroker(c.brokerUri)
-	opts.SetClientID(c.clientId)
+	opts.AddBroker(c.BrokerUri)
+	opts.SetClientID(c.ClientId)
 
 	logger := logger{}
 	mqtt.ERROR = logger
 	mqtt.CRITICAL = logger
 	mqtt.WARN = logger
 
-	if c.verbose {
+	if c.Verbose {
 		mqtt.DEBUG = logger
 	}
 

@@ -1,0 +1,4 @@
+broker_uri: localhost:1883
+client_id: pump
+verbose: true
+

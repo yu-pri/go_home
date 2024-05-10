@@ -11,17 +11,53 @@ import (
 type PumpController struct {
 	mqttClient               mqtt.Client
 	isRelayEnabled           bool
-	isRelayManuallyEnabled   bool
-	latestReverseTemperature int
+	inManualMode             bool
+	latestReverseTemperature *int
 	config                   PumpControllerConfig
 }
 
-func (c *PumpController) ToggleRelayIfNeeded(isEnabled bool) {
-	if isEnabled == c.isRelayEnabled {
-		return
+func NewPumpController(mqttClient mqtt.Client, config PumpControllerConfig) PumpController {
+	return PumpController{
+		mqttClient:               mqttClient,
+		config:                   config,
+		inManualMode:             true, // wait until broker tells we're in auto mode
+		isRelayEnabled:           false,
+		latestReverseTemperature: nil, // TODO save a history log; restore if latest reading isn't far off in the past
 	}
+}
 
-	c.mqttClient.Publish(c.config.PumpRelayTopic, common.QosAtLeastOnce, true, isEnabled)
+func (c *PumpController) SetupSubscriptions() {
+	c.mqttClient.Subscribe(c.config.PumpDesiredStateTopic, common.QosAtLeastOnce, c.DesiredStateHandler())
+	c.mqttClient.Subscribe(c.config.ReverseTempSensorTopic, common.QosAtLeastOnce, c.ReverseTemperatureHandler())
+}
+
+func (pumpController *PumpController) DesiredStateHandler() mqtt.MessageHandler {
+	return func(c mqtt.Client, m mqtt.Message) {
+		payload := m.Payload()
+		fmt.Printf("received payload : %s", payload)
+
+		desiredState := string(payload)
+
+		if PumpDesiredStateOn == desiredState {
+			pumpController.inManualMode = true
+			pumpController.toggleRelayIfNeeded(true)
+			return
+		}
+
+		if PumpDesiredStateOff == desiredState {
+			pumpController.inManualMode = true
+			pumpController.toggleRelayIfNeeded(false)
+			return
+		}
+
+		if PumpDesiredStateAuto == desiredState {
+			pumpController.inManualMode = false
+			pumpController.autoSetRelayState(pumpController.latestReverseTemperature)
+			return
+		}
+
+		fmt.Printf("Bad payload for desired pump state topic: %s", payload)
+	}
 }
 
 func (pumpController *PumpController) ReverseTemperatureHandler() mqtt.MessageHandler {
@@ -29,34 +65,41 @@ func (pumpController *PumpController) ReverseTemperatureHandler() mqtt.MessageHa
 		payload := m.Payload()
 		fmt.Printf("received payload : %s", payload)
 
-		temperatureCelsius, _ := strconv.Atoi(string(payload))
-		pumpController.latestReverseTemperature = temperatureCelsius
+		temperatureCelsius, err := strconv.Atoi(string(payload))
+		if err != nil {
+			fmt.Printf("Bad payload for reverse temperature topic: %s, error: %s", payload, err)
+			return
+		}
 
-		relayShouldBeEnabled := temperatureCelsius > pumpController.config.PumpOnTemperature
-		pumpController.ToggleRelayIfNeeded(relayShouldBeEnabled)
+		pumpController.latestReverseTemperature = &temperatureCelsius
+
+		if pumpController.inManualMode {
+			return
+		}
+
+		pumpController.autoSetRelayState(&temperatureCelsius)
 	}
 }
 
-func (pumpController *PumpController) DesiredStateHandler(config PumpControllerConfig) mqtt.MessageHandler {
-	return func(c mqtt.Client, m mqtt.Message) {
-		payload := m.Payload()
-
-		desiredState := string(payload)
-
-		if desiredState == PumpDesiredStateOn {
-			pumpController.ToggleRelayIfNeeded(true)
-			// todo set manual mode to prevent automatic relay toggles
-			return
-		}
-
-		if desiredState == PumpDesiredStateOff {
-			pumpController.ToggleRelayIfNeeded(false)
-			return
-		}
-
-		if desiredState == PumpDesiredStateAuto {
-			// TODO: set relay state based on latestReverseTemperature
-			return
-		}
+func (pumpController *PumpController) autoSetRelayState(currentReverseTemperature *int) {
+	if currentReverseTemperature == nil {
+		return
 	}
+	relayShouldBeEnabled := *currentReverseTemperature > pumpController.config.PumpOnTemperature
+	pumpController.toggleRelayIfNeeded(relayShouldBeEnabled)
+}
+
+func (c *PumpController) toggleRelayIfNeeded(isEnabled bool) {
+	if isEnabled == c.isRelayEnabled {
+		return
+	}
+
+	token := c.mqttClient.Publish(c.config.PumpRelayTopic, common.QosAtLeastOnce, true, isEnabled)
+
+	if token.Wait() && token.Error() != nil {
+		fmt.Printf("Failed to communicate with relay service: %s", token.Error().Error())
+		return
+	}
+
+	c.isRelayEnabled = isEnabled
 }
