@@ -1,33 +1,35 @@
-package cmd
+package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/yu-pri/go_home/common"
 	"github.com/yu-pri/go_home/services/pump_control"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 func main() {
-	client := common.SetupMqttConnection()
+	mqttConfigPath := os.Args[1]
+	pumpConfigPath := os.Args[2]
+	fmt.Printf("mqtt config: %s, pump config: %s", mqttConfigPath, pumpConfigPath)
+
+	mqttSecrets := common.ReadMqttClientSecretsFromEnv()
+	mqttConfig, err := common.ParseMqttConfigFile(mqttConfigPath)
+
+	if err != nil {
+		fmt.Printf("Error parsing configs: %s", err)
+		return
+	}
+	pumpConfig, err := pumpcontrol.ParseConfig(pumpConfigPath)
+	if err != nil {
+		fmt.Printf("Error parsing configs: %s", err)
+		return
+	}
+	client := common.SetupMqttConnection(*mqttConfig, mqttSecrets)
 	defer client.Disconnect(1000)
 
-	client.Subscribe("/sensors/temp/01", 1, pumpcontrol.HandleTemperaturePayload)
-	defer client.Unsubscribe("/sensors/temp/01")
+	pumpController := pumpcontrol.NewPumpController(client, pumpConfig)
+	pumpController.SetupSubscriptions()
 
-	<-setupStopSignal()
-}
-
-func setupStopSignal() chan bool {
-	osSignals := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-
-	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGABRT, syscall.SIGTERM)
-
-	go func() {
-		<-osSignals
-		done <- true
-	}()
-
-	return done
+	<-common.SetupStopSignal()
 }

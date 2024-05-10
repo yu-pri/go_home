@@ -1,0 +1,6 @@
+mqtt_client_id: pump_controller
+reverse_temp_sensor_topic: /sensors/temperature/reverse
+pump_relay_topic: /relays/pump
+pump_desired_state_topic: /pump/desired_state
+pump_on_temperature: 30
+

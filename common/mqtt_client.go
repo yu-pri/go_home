@@ -2,34 +2,63 @@ package common
 
 import (
 	"fmt"
+	"os"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-type verboseLogger struct{}
+type MqttClientConfig struct {
+	BrokerUri string `yaml:"broker_uri"`
+	Verbose   bool   `yaml:"verbose"`
+}
 
-func (verboseLogger) Printf(format string, v ...interface{}) {
+func ParseMqttConfigFile(filePath string) (*MqttClientConfig, error) {
+	out, err := ReadParseYamlFile[MqttClientConfig](filePath)
+	fmt.Printf("\nmqtt cfg: %s, %s, %s\n", out.BrokerUri, out.ClientId, out.Verbose)
+	return out, err
+}
+
+type MqttClientSecrets struct {
+	username string
+	password string
+}
+
+func ReadMqttClientSecretsFromEnv() MqttClientSecrets {
+	username := os.Getenv("MQTT_USERNAME")
+	password := os.Getenv("MQTT_PASSWORD")
+
+	return MqttClientSecrets{
+		username, password,
+	}
+}
+
+type logger struct{}
+
+func (logger) Printf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
-func (verboseLogger) Println(v ...interface{}) {
+func (logger) Println(v ...interface{}) {
 	fmt.Println(v...)
 }
 
-func SetupMqttConnection() mqtt.Client {
+func SetupMqttConnection(c MqttClientConfig, s MqttClientSecrets, clientId string) mqtt.Client {
 	opts := mqtt.NewClientOptions()
-	opts.SetUsername("yupri")
-	opts.SetPassword("test")
-	opts.AddBroker("localhost:1883")
-	opts.SetClientID("pump_controller")
-	logger := verboseLogger{}
+	fmt.Printf("broker uri : %s", c.BrokerUri)
+	opts.SetUsername(s.username)
+	opts.SetPassword(s.password)
+	opts.AddBroker(c.BrokerUri)
+	opts.SetClientID(clientId)
+
+	logger := logger{}
 	mqtt.ERROR = logger
-	mqtt.DEBUG = logger
-	mqtt.WARN = logger
 	mqtt.CRITICAL = logger
+	mqtt.WARN = logger
+
+	if c.Verbose {
+		mqtt.DEBUG = logger
+	}
 
 	client := mqtt.NewClient(opts)
-	status := client.IsConnected()
-	fmt.Printf("initial status: %t", status)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
